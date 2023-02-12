@@ -3,49 +3,62 @@ package attract
 import (
 	"life/settings"
 	"log"
+	"math/rand"
+	"time"
 )
 
-func DefaultAttraction(d float64) float64 {
-	return .5 / d
-}
+var AttractionMatrix = [][]float64{}
+var RadiusMatrix = [][]float64{}
 
-var AttractionMatrix = [settings.TYPES][settings.TYPES]float64{}
-var RadiusMatrix = [settings.TYPES][settings.TYPES]float64{}
-
-func init() {
-	switch settings.ATTRACTION {
+func RandomizeAttractionMatrix() {
+	switch settings.AttractionSelection {
 	case "random":
-		for j := 0; j < settings.TYPES; j++ {
-			for i := 0; i < settings.TYPES; i++ {
-				AttractionMatrix[i][j] = 2*settings.RANDOMFUNC() - 1
+		for j := 0; j < settings.MaxTypes; j++ {
+			for i := 0; i < settings.MaxTypes; i++ {
+				AttractionMatrix[i][j] = 2*settings.RandomFunc() - 1
 			}
 		}
 	case "cluster":
-		for j := 0; j < settings.TYPES; j++ {
-			for i := 0; i < settings.TYPES; i++ {
+		for j := 0; j < settings.MaxTypes; j++ {
+			for i := 0; i < settings.MaxTypes; i++ {
 				if i == j {
-					AttractionMatrix[i][j] = -1
-				} else {
 					AttractionMatrix[i][j] = 1
+				} else {
+					AttractionMatrix[i][j] = 0
 				}
 			}
 		}
 	default:
 		log.Fatal("Invalid attraction type")
 	}
+}
 
-	switch settings.RADII {
+func init() {
+	rand.Seed(time.Now().UnixNano())
+
+	for i := 0; i < settings.MaxTypes; i++ {
+		AttractionMatrix = append(AttractionMatrix, []float64{})
+		RadiusMatrix = append(RadiusMatrix, []float64{})
+		for j := 0; j < settings.MaxTypes; j++ {
+			AttractionMatrix[i] = append(AttractionMatrix[i], 0)
+			RadiusMatrix[i] = append(RadiusMatrix[i], 0)
+		}
+	}
+
+	RandomizeAttractionMatrix()
+
+	switch settings.RadiiSelection {
 	case "random":
-		for j := 0; j < settings.TYPES; j++ {
-			for i := 0; i < settings.TYPES; i++ {
-				RadiusMatrix[i][j] = 2*settings.RANDOMFUNC() - 1
+		for j := 0; j < settings.MaxTypes; j++ {
+			for i := 0; i < settings.MaxTypes; i++ {
+				RadiusMatrix[i][j] = 2*settings.RandomFunc() - 1
 			}
 		}
 
 	case "equal":
-		for j := 0; j < settings.TYPES; j++ {
-			for i := 0; i < settings.TYPES; i++ {
-				RadiusMatrix[i][j] = settings.MINRADIUS
+		for j := 0; j < settings.MaxTypes; j++ {
+			for i := 0; i < settings.MaxTypes; i++ {
+				RadiusMatrix[i][j] = settings.MinRadius
 			}
 		}
 	default:
@@ -55,29 +68,65 @@ func init() {
 
 type AttractionFunction func(float64, int8, int8) float64
 
-const HALFREPELRADIUS = settings.REPELRADIUS / 2
+var HalfRepelRadius = settings.RepelRadius / 2
 
-func BaseAttractionAbs(d float64, t, ot int8) float64 {
-	h := AttractionMatrix[t][ot]
-	k := RadiusMatrix[t][ot]
+func AbsoluteAttractionFunc() AttractionFunction {
+	return func(d float64, t, ot int8) float64 {
+		h := AttractionMatrix[t][ot]
+		k := RadiusMatrix[t][ot]
 
-	if d < settings.REPELRADIUS {
-		return -(settings.REPELSTRENGTH / (d/settings.REPELRADIUS + 1)) + HALFREPELRADIUS
+		if d < settings.RepelRadius {
+			return -(settings.RepelStrength / (d/settings.RepelRadius + 1)) + HalfRepelRadius
+		}
+		if d < settings.RepelRadius+2/k {
+			return -h*(k*d-k*settings.RepelRadius-1) + h
+		}
+		return 0
 	}
-	if d < settings.REPELRADIUS+2/k {
-		return -h*(k*d-k*settings.REPELRADIUS-1) + h
-	}
-	return 0
 }
 
-func RandomAttractionFunc() AttractionFunction {
+func ClusterAttractionFunc() AttractionFunction {
 	return func(d float64, t int8, ot int8) float64 {
-		return BaseAttractionAbs(d, t, ot)
+		if d < settings.RepelRadius {
+			return -settings.RepelStrength / (d)
+		}
+
+		if t == ot {
+			return .3 / d
+		}
+		return 0
+	}
+}
+
+func SnakeAttractionFunc() AttractionFunction {
+	return func(d float64, t int8, ot int8) float64 {
+		if d < 10 {
+			return -1 / (d)
+		}
+
+		if t == ot || t == ot+1 {
+			return .5 / (d * 10)
+		}
+
+		return 0
 	}
 }
 
 func DefaultAttractionFunc() AttractionFunction {
 	return func(d float64, t int8, ot int8) float64 {
+		if d < settings.RepelRadius {
+			return -settings.RepelStrength / (d)
+		}
 		return AttractionMatrix[t][ot] / d
+	}
+}
+
+func SimpleAttractionFunc() AttractionFunction {
+	v := rand.NormFloat64()
+	return func(d float64, t int8, ot int8) float64 {
+		if d < settings.RepelRadius {
+			return -settings.RepelStrength / (d)
+		}
+		return v / d
 	}
 }

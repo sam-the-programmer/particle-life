@@ -1,31 +1,39 @@
 package settings
 
-import "math/rand"
+import (
+	"math/rand"
+)
 
 const (
 	// World Settings
-	ARRANGEMENT = "random"
-	N_PARTICLES = 300
-	SCALE       = 1
-	WIDTH       = 500
-	HEIGHT      = 500
+	Arrangement  = "random"
+	Scale        = 1.
+	Width        = 1200
+	Height       = 800
+	MaxTypes     = 100
+	MaxParticles = 10000
 
-	// Particle Settings
-	TYPES         = 10
-	SPEED         = .001
-	PARTICLE_SIZE = 3
-	REPELRADIUS   = 0.5
-	REPELSTRENGTH = 2
+	// Optional Attraction Settings
+	AttractionSelection = "random"
+	RadiiSelection      = "random"
 
-	ATTRACTION = "cluster"
-	RADII      = "equal"
+	MinRadius = 100
+	MaxRadius = 200
 
-	MINRADIUS = 100
-	MAXRADIUS = 200
-
-	FRICTION = .999
+	// UI Settings
+	UIWidth = 200
 )
 
 var (
-	RANDOMFUNC = rand.NormFloat64
+	// Changable Settings
+	ParticleSize  = 2
+	Friction      = .99
+	RepelRadius   = 10.
+	RepelStrength = 1.
+	Speed         = .03
+	Types         = 5
+	NParticles    = 300
+
+	// Randomization Settings
+	RandomFunc = rand.Float64
 )
