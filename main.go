@@ -119,6 +119,9 @@ var UI = map[[4]int][2]func(*Game){
 	{settings.Width + 6, 4, settings.UIWidth - 10, 30}: {
 		func(g *Game) {
 			g.Setup()
+			for i := 0; i < settings.MaxTypes; i++ {
+				RecomputeImages(i)
+			}
 		},
 		func(g *Game) {},
 	},
@@ -323,7 +326,7 @@ var UI = map[[4]int][2]func(*Game){
 		},
 	},
 
-	{settings.Width + 8, 423, (settings.UIWidth - 16) / 2, 30}: {
+	{settings.Width + 8, 503, (settings.UIWidth - 16) / 2, 30}: {
 		func(g *Game) {
 			attract.AttractionMatrix = make([][]float64, settings.MaxTypes)
 			for i := 0; i < settings.MaxTypes; i++ {
@@ -331,7 +334,7 @@ var UI = map[[4]int][2]func(*Game){
 			}
 		}, func(g *Game) {},
 	},
-	{settings.Width + 4 + (settings.UIWidth)/2, 423, (settings.UIWidth - 16) / 2, 30}: {
+	{settings.Width + 4 + (settings.UIWidth)/2, 503, (settings.UIWidth - 16) / 2, 30}: {
 		func(g *Game) {
 			for i := range attract.AttractionMatrix {
 				for j := range attract.AttractionMatrix[i] {
@@ -365,8 +368,8 @@ var Labels = map[[2]int]string{
 	{settings.Width + 8, 282}:   fmt.Sprintf("Size: %d", settings.ParticleSize),
 	{settings.Width + 120, 282}: "+",
 	{settings.Width + 170, 282}: "-",
-	{settings.Width + 34, 429}:  "Clear",
-	{settings.Width + 134, 429}: "Random",
+	{settings.Width + 34, 510}:  "Clear",
+	{settings.Width + 128, 510}: "Random",
 }
 
 type Game struct {
@@ -411,6 +414,22 @@ func (g *Game) Update(screen *ebiten.Image) error {
 			wg.Done()
 		}(i)
 	}
+
+	if ebiten.IsMouseButtonPressed(ebiten.MouseButtonLeft) {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			x, y := ebiten.CursorPosition()
+			for i := range g.particles {
+				g.particles[i].UpdateVelocity(Particle{
+					X:    float64(x),
+					Y:    float64(y),
+					Type: g.particles[i].Type,
+				}, attract.MouseAttraction)
+			}
+		}()
+	}
+
 	wg.Wait()
 
 	wg.Add(2)
@@ -535,13 +554,13 @@ func (g *Game) Draw(screen *ebiten.Image) {
 		// coloured headers
 		ebitenutil.DrawRect(
 			screen,
-			float64(settings.Width+24+(i*boxWidth)), float64(464),
+			float64(settings.Width+24+(i*boxWidth)), float64(314),
 			float64(boxWidth), 10,
 			RGBColours[i],
 		)
 		ebitenutil.DrawRect(
 			screen,
-			float64(settings.Width+8), float64(478+(i*boxWidth)),
+			float64(settings.Width+8), float64(328+(i*boxWidth)),
 			10, float64(boxWidth),
 			RGBColours[i],
 		)
@@ -556,7 +575,7 @@ func (g *Game) Draw(screen *ebiten.Image) {
 
 			ebitenutil.DrawRect(
 				screen,
-				float64(settings.Width+24+(i*boxWidth)), float64(478+(j*boxWidth)),
+				float64(settings.Width+24+(i*boxWidth)), float64(328+(j*boxWidth)),
 				float64(boxWidth), float64(boxWidth),
 				colour,
 			)
@@ -565,7 +584,7 @@ func (g *Game) Draw(screen *ebiten.Image) {
 					screen,
 					fmt.Sprintf("%0.1f", attract.AttractionMatrix[i][j]),
 					settings.Width+24+(i*boxWidth)+boxWidth/2-10,
-					478+(j*boxWidth)+boxWidth/2-5,
+					328+(j*boxWidth)+boxWidth/2-5,
 				)
 			}
 		}
@@ -575,9 +594,15 @@ func (g *Game) Draw(screen *ebiten.Image) {
 	ebitenutil.DrawRect(
 		screen,
 		float64(settings.Width+24+(g.matrixEditorLoc[0]*boxWidth)),
-		float64(478+(g.matrixEditorLoc[1]*boxWidth)),
+		float64(328+(g.matrixEditorLoc[1]*boxWidth)),
 		float64(boxWidth), 4,
 		color.RGBA{255, 255, 255, 255},
+	)
+
+	ebitenutil.DebugPrintAt(
+		screen,
+		"Esc: Exit\nF11: Toggle Fullscreen\nSome settings need a new\nenvironment before they update.\nSome update live.\nArrow keys to move editor\nselection. Q and E to change\nvalues. Click to\ninteract.",
+		settings.Width+6, settings.Height-200,
 	)
 }
 

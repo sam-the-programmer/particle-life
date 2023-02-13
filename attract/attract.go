@@ -130,3 +130,10 @@ func SimpleAttractionFunc() AttractionFunction {
 		return v / d
 	}
 }
+
+func MouseAttraction(d float64, t, ot int8) float64 {
+	if d < 60 {
+		return -25 / d
+	}
+	return 0
+}
