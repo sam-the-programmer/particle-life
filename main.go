@@ -14,6 +14,7 @@ import (
 
 	"github.com/hajimehoshi/ebiten"
 	"github.com/hajimehoshi/ebiten/ebitenutil"
+	col "github.com/lucasb-eyer/go-colorful"
 )
 
 var (
@@ -26,13 +27,6 @@ func init() {
 	rand.Seed(time.Now().UnixNano())
 
 	for i := 0; i < 100; i++ {
-		RGBColours[i] = color.RGBA{
-			R: uint8(255 * math.Abs(math.Sin(float64(i)*2*math.Pi/float64(settings.Types)))),
-			G: uint8(255 * math.Abs(math.Sin(float64(i)*2*math.Pi/float64(settings.Types)+2*math.Pi/3))),
-			B: uint8(255 * math.Abs(math.Sin(float64(i)*2*math.Pi/float64(settings.Types)+4*math.Pi/3))),
-			A: 255,
-		}
-
 		RecomputeImages(i)
 
 		Attractors[i] = attract.DefaultAttractionFunc()
@@ -40,6 +34,8 @@ func init() {
 }
 
 func RecomputeImages(i int) {
+	RecomputeColours()
+
 	var err error
 	Images[i], err = ebiten.NewImage(settings.ParticleSize, settings.ParticleSize, ebiten.FilterLinear)
 	if err != nil {
@@ -48,6 +44,28 @@ func RecomputeImages(i int) {
 	err = Images[i].Fill(RGBColours[i])
 	if err != nil {
 		log.Fatal(err)
+	}
+}
+
+func RecomputeColour(i int) {
+	colour := col.Hsl(
+		// equal spacing in hue based of Types
+		360*float64(i)/float64(settings.Types),
+		1,
+		.7,
+	)
+
+	RGBColours[i] = color.RGBA{
+		R: uint8(colour.R * 255),
+		G: uint8(colour.G * 255),
+		B: uint8(colour.B * 255),
+		A: 255,
+	}
+}
+
+func RecomputeColours() {
+	for j := 0; j < settings.MaxTypes; j++ {
+		RecomputeColour(j)
 	}
 }
 
@@ -94,14 +112,8 @@ func (p *Particle) UpdatePosition() {
 	p.Velocity[1] *= settings.Friction
 }
 
-type Game struct {
-	particles []Particle
-}
-
-var clicks = map[string]int8{
-	"types++": 0,
-	"types--": 0,
-}
+var clicks = map[string]int8{}
+var presses = map[ebiten.Key]int8{}
 
 var UI = map[[4]int][2]func(*Game){
 	{settings.Width + 6, 4, settings.UIWidth - 10, 30}: {
@@ -122,6 +134,7 @@ var UI = map[[4]int][2]func(*Game){
 				settings.Types = int(math.Min(float64(settings.Types), float64(settings.MaxTypes)))
 				clicks["types++"] = 0
 				Labels[[2]int{settings.Width + 8, 42}] = fmt.Sprintf("Types: %d", settings.Types)
+				RecomputeColours()
 			}
 		},
 	},
@@ -135,6 +148,7 @@ var UI = map[[4]int][2]func(*Game){
 				settings.Types--
 				settings.Types = int(math.Max(float64(settings.Types), 1))
 				Labels[[2]int{settings.Width + 8, 42}] = fmt.Sprintf("Types: %d", settings.Types)
+				RecomputeColours()
 			}
 		},
 	},
@@ -308,10 +322,28 @@ var UI = map[[4]int][2]func(*Game){
 			}
 		},
 	},
+
+	{settings.Width + 8, 423, (settings.UIWidth - 16) / 2, 30}: {
+		func(g *Game) {
+			attract.AttractionMatrix = make([][]float64, settings.MaxTypes)
+			for i := 0; i < settings.MaxTypes; i++ {
+				attract.AttractionMatrix[i] = make([]float64, settings.MaxTypes)
+			}
+		}, func(g *Game) {},
+	},
+	{settings.Width + 4 + (settings.UIWidth)/2, 423, (settings.UIWidth - 16) / 2, 30}: {
+		func(g *Game) {
+			for i := range attract.AttractionMatrix {
+				for j := range attract.AttractionMatrix[i] {
+					attract.AttractionMatrix[i][j] = 2*rand.Float64() - 1
+				}
+			}
+		}, func(g *Game) {},
+	},
 }
 
 var Labels = map[[2]int]string{
-	{settings.Width + 50, 10}:   "Reset Environment",
+	{settings.Width + 45, 10}:   "Random Environment",
 	{settings.Width + 8, 42}:    fmt.Sprintf("Types: %d", settings.Types),
 	{settings.Width + 120, 42}:  "+",
 	{settings.Width + 170, 42}:  "-",
@@ -333,6 +365,14 @@ var Labels = map[[2]int]string{
 	{settings.Width + 8, 282}:   fmt.Sprintf("Size: %d", settings.ParticleSize),
 	{settings.Width + 120, 282}: "+",
 	{settings.Width + 170, 282}: "-",
+	{settings.Width + 34, 429}:  "Clear",
+	{settings.Width + 134, 429}: "Random",
+}
+
+type Game struct {
+	particles       []Particle
+	matrixEditorLoc [2]int
+	darkTheme       bool
 }
 
 func (g *Game) Update(screen *ebiten.Image) error {
@@ -367,7 +407,6 @@ func (g *Game) Update(screen *ebiten.Image) error {
 					Y:    g.particles[j].Y - settings.Height,
 					Type: g.particles[j].Type,
 				}, Attractors[g.particles[i].Type])
-
 			}
 			wg.Done()
 		}(i)
@@ -385,11 +424,65 @@ func (g *Game) Update(screen *ebiten.Image) error {
 	go func() {
 		defer wg.Done()
 		if ebiten.IsKeyPressed(ebiten.KeyF11) {
-			ebiten.SetFullscreen(true)
-		} else if ebiten.IsKeyPressed(ebiten.KeyF12) {
-			ebiten.SetFullscreen(false)
+			presses[ebiten.KeyF11] = 1
+		} else if ebiten.IsKeyPressed(ebiten.KeyUp) {
+			presses[ebiten.KeyUp] = 1
+		} else if ebiten.IsKeyPressed(ebiten.KeyDown) {
+			presses[ebiten.KeyDown] = 1
+		} else if ebiten.IsKeyPressed(ebiten.KeyLeft) {
+			presses[ebiten.KeyLeft] = 1
+		} else if ebiten.IsKeyPressed(ebiten.KeyRight) {
+			presses[ebiten.KeyRight] = 1
+		} else if ebiten.IsKeyPressed(ebiten.KeyQ) {
+			presses[ebiten.KeyQ] = 1
+		} else if ebiten.IsKeyPressed(ebiten.KeyE) {
+			presses[ebiten.KeyE] = 1
 		} else if ebiten.IsKeyPressed(ebiten.KeyEscape) {
 			os.Exit(0)
+		}
+
+		for i, v := range presses {
+			if v == 1 {
+				if !ebiten.IsKeyPressed(i) {
+					presses[i] = 0
+
+					switch i {
+					case ebiten.KeyUp:
+						g.matrixEditorLoc[1]--
+						g.matrixEditorLoc[1] = int(math.Max(0, float64(g.matrixEditorLoc[1])))
+					case ebiten.KeyDown:
+						g.matrixEditorLoc[1]++
+						g.matrixEditorLoc[1] = int(math.Min(float64(settings.Types-1), float64(g.matrixEditorLoc[1])))
+					case ebiten.KeyLeft:
+						g.matrixEditorLoc[0]--
+						g.matrixEditorLoc[0] = int(math.Max(0, float64(g.matrixEditorLoc[0])))
+					case ebiten.KeyRight:
+						g.matrixEditorLoc[0]++
+						g.matrixEditorLoc[0] = int(math.Min(float64(settings.Types-1), float64(g.matrixEditorLoc[0])))
+					case ebiten.KeyQ:
+						attract.AttractionMatrix[g.matrixEditorLoc[0]][g.matrixEditorLoc[1]] += 0.1
+						if attract.AttractionMatrix[g.matrixEditorLoc[0]][g.matrixEditorLoc[1]] > 1 {
+							attract.AttractionMatrix[g.matrixEditorLoc[0]][g.matrixEditorLoc[1]] = 1
+						} else if attract.AttractionMatrix[g.matrixEditorLoc[0]][g.matrixEditorLoc[1]] < -1 {
+							attract.AttractionMatrix[g.matrixEditorLoc[0]][g.matrixEditorLoc[1]] = -1
+						}
+					case ebiten.KeyE:
+						attract.AttractionMatrix[g.matrixEditorLoc[0]][g.matrixEditorLoc[1]] -= 0.1
+						if attract.AttractionMatrix[g.matrixEditorLoc[0]][g.matrixEditorLoc[1]] > 1 {
+							attract.AttractionMatrix[g.matrixEditorLoc[0]][g.matrixEditorLoc[1]] = 1
+						} else if attract.AttractionMatrix[g.matrixEditorLoc[0]][g.matrixEditorLoc[1]] < -1 {
+							attract.AttractionMatrix[g.matrixEditorLoc[0]][g.matrixEditorLoc[1]] = -1
+						}
+					case ebiten.KeyF11:
+						ebiten.SetFullscreen(!ebiten.IsFullscreen())
+					}
+
+					g.matrixEditorLoc = [2]int{
+						int(math.Max(0, math.Min(float64(len(Attractors)-1), float64(g.matrixEditorLoc[0])))),
+						int(math.Max(0, math.Min(float64(len(Attractors)-1), float64(g.matrixEditorLoc[1])))),
+					}
+				}
+			}
 		}
 	}()
 
@@ -399,7 +492,25 @@ func (g *Game) Update(screen *ebiten.Image) error {
 }
 
 func (g *Game) Draw(screen *ebiten.Image) {
-	// Editor UI
+	// Onclick Events
+	if ebiten.IsMouseButtonPressed(ebiten.MouseButtonLeft) {
+		x, y := ebiten.CursorPosition()
+		for k, v := range UI {
+			if x >= k[0] && x <= k[0]+k[2] && y >= k[1] && y <= k[1]+k[3] {
+				v[0](g)
+			}
+		}
+	} else {
+		for k := range UI {
+			UI[k][1](g)
+		}
+	}
+
+	if !g.darkTheme {
+		screen.Fill(color.White)
+	}
+
+	// UI
 	ebitenutil.DrawRect(screen, settings.Width+1, 0, 2, settings.Height, color.RGBA{100, 100, 100, 255})
 
 	for i := range UI {
@@ -412,33 +523,62 @@ func (g *Game) Draw(screen *ebiten.Image) {
 
 	ebitenutil.DebugPrintAt(screen, fmt.Sprintf("FPS: %0.0f, TPS: %0.0f", ebiten.CurrentFPS(), ebiten.CurrentTPS()), settings.Width+12, settings.Height-22)
 
-	var wg sync.WaitGroup
-	wg.Add(2)
-	go func() { // onclick events for ui
-		defer wg.Done()
-		if ebiten.IsMouseButtonPressed(ebiten.MouseButtonLeft) {
-			x, y := ebiten.CursorPosition()
-			for k, v := range UI {
-				if x >= k[0] && x <= k[0]+k[2] && y >= k[1] && y <= k[1]+k[3] {
-					v[0](g)
-				}
-			}
-		} else {
-			for k := range UI {
-				UI[k][1](g)
-			}
-		}
-	}()
+	for _, p := range g.particles {
+		op := &ebiten.DrawImageOptions{}
+		op.GeoM.Translate(p.X, p.Y)
+		screen.DrawImage(Images[p.Type], op)
+	}
 
-	go func() {
-		defer wg.Done()
-		for _, p := range g.particles {
-			op := &ebiten.DrawImageOptions{}
-			op.GeoM.Translate(p.X, p.Y)
-			screen.DrawImage(Images[p.Type], op)
+	// Editor
+	boxWidth := (settings.UIWidth - 40) / settings.Types
+	for i := 0; i < settings.Types; i++ {
+		// coloured headers
+		ebitenutil.DrawRect(
+			screen,
+			float64(settings.Width+24+(i*boxWidth)), float64(464),
+			float64(boxWidth), 10,
+			RGBColours[i],
+		)
+		ebitenutil.DrawRect(
+			screen,
+			float64(settings.Width+8), float64(478+(i*boxWidth)),
+			10, float64(boxWidth),
+			RGBColours[i],
+		)
+
+		for j := 0; j < settings.Types; j++ {
+			colour := color.RGBA{20, 20, 20, 255}
+			if attract.AttractionMatrix[i][j] > 0 {
+				colour = color.RGBA{0, uint8(255 * attract.AttractionMatrix[i][j]), 0, 255}
+			} else if attract.AttractionMatrix[i][j] < 0 {
+				colour = color.RGBA{uint8(255 * (1 - attract.AttractionMatrix[i][j])), 0, 0, 255}
+			}
+
+			ebitenutil.DrawRect(
+				screen,
+				float64(settings.Width+24+(i*boxWidth)), float64(478+(j*boxWidth)),
+				float64(boxWidth), float64(boxWidth),
+				colour,
+			)
+			if settings.Types < 7 {
+				ebitenutil.DebugPrintAt(
+					screen,
+					fmt.Sprintf("%0.1f", attract.AttractionMatrix[i][j]),
+					settings.Width+24+(i*boxWidth)+boxWidth/2-10,
+					478+(j*boxWidth)+boxWidth/2-5,
+				)
+			}
 		}
-	}()
-	wg.Wait()
+	}
+
+	// add small white border to editor selection (editorLoc)
+	ebitenutil.DrawRect(
+		screen,
+		float64(settings.Width+24+(g.matrixEditorLoc[0]*boxWidth)),
+		float64(478+(g.matrixEditorLoc[1]*boxWidth)),
+		float64(boxWidth), 4,
+		color.RGBA{255, 255, 255, 255},
+	)
 }
 
 func (g *Game) Layout(outsideWidth, outsideHeight int) (screenWidth, screenHeight int) {
@@ -446,7 +586,6 @@ func (g *Game) Layout(outsideWidth, outsideHeight int) (screenWidth, screenHeigh
 }
 
 func (g *Game) Setup() {
-	attract.RandomizeAttractionMatrix()
 	g.particles = make([]Particle, 0, settings.NParticles)
 	switch settings.Arrangement {
 	case "random":
@@ -514,6 +653,14 @@ func (g *Game) Setup() {
 				})
 			}
 		}
+	case "point":
+		for i := 0; i < settings.NParticles; i++ {
+			g.particles = append(g.particles, Particle{
+				X:    settings.Width/2 + rand.Float64() - .5,
+				Y:    settings.Height/2 + rand.Float64() - .5,
+				Type: int8(rand.Intn(settings.Types)),
+			})
+		}
 	default:
 		log.Fatal("Unknown arrangement.")
 	}
@@ -525,10 +672,9 @@ func main() {
 	ebiten.SetWindowResizable(true)
 	ebiten.SetInitFocused(true)
 	ebiten.SetRunnableOnUnfocused(true)
-	ebiten.SetVsyncEnabled(true)
 	ebiten.SetMaxTPS(250)
 
-	game := Game{}
+	game := Game{darkTheme: true}
 	game.Setup()
 
 	if err := ebiten.RunGame(&game); err != nil {
