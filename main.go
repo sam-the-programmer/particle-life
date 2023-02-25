@@ -601,7 +601,7 @@ func (g *Game) Draw(screen *ebiten.Image) {
 
 	ebitenutil.DebugPrintAt(
 		screen,
-		"Esc: Exit\nF11: Toggle Fullscreen\nSome settings need a new\nenvironment before they update.\nSome update live.\nArrow keys to move editor\nselection. Q and E to change\nvalues. Click to\ninteract.",
+		"Esc: Exit\nF11: Toggle Fullscreen\nSome settings need a new\nenvironment before they update.\nSome update live.\nArrow keys to move editor\nselection. Q and E to change\nvalues. Click to interact.",
 		settings.Width+6, settings.Height-200,
 	)
 }
