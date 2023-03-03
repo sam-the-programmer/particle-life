@@ -167,6 +167,13 @@ var UI = map[[4]int][2]func(*Game){
 				settings.NParticles = int(math.Min(float64(settings.NParticles), float64(settings.MaxParticles)))
 				clicks["particles++"] = 0
 				Labels[[2]int{settings.Width + 8, 82}] = fmt.Sprintf("Particles: %d", settings.NParticles)
+				if settings.NParticles > 499 {
+					ebiten.SetMaxTPS(65)
+				} else if settings.NParticles > 999 {
+					ebiten.SetMaxTPS(45)
+				} else {
+					ebiten.SetMaxTPS(250)
+				}
 			}
 		},
 	},

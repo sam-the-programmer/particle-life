@@ -6,7 +6,7 @@ import (
 
 const (
 	// World Settings
-	Arrangement  = "point"
+	Arrangement  = "random"
 	Scale        = 1.
 	Width        = 1200
 	Height       = 800
